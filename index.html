@@ -216,6 +216,8 @@ button.pill:hover{border-color:var(--line2);transform:translateY(-1px)}
 .wmark{width:48px;height:48px;border-radius:13px;background:linear-gradient(140deg,var(--red),var(--red2));color:#fff;display:grid;place-items:center;font-family:var(--hanja);font-weight:900;font-size:28px;transform:rotate(-5deg)}
 #welcome h2{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:-.02em;margin:4px 0 0}
 #welcome p{margin:0;font-size:14px;color:var(--muted)}
+#welcome .wtip{padding:9px 12px;border-radius:12px;background:color-mix(in srgb,var(--gold) 16%,transparent);color:var(--ink);font-size:13.5px;line-height:1.5}
+#welcome .wtip b{color:var(--red)}
 #welcome input{font:inherit;font-size:16px;color:var(--ink);background:var(--soft);border:1px solid transparent;border-radius:12px;padding:11px 14px;margin-top:4px}
 #welcome input:focus{background:var(--card);border-color:var(--line2);outline:0}
 .wbtns{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
@@ -301,7 +303,7 @@ tr.mine td{background:color-mix(in srgb,var(--gold) 18%,transparent)}
       <h2>어디부터 풀까요?</h2>
       <p>지역을 고르면 카드로 미리 익히거나 바로 퀴즈를 풀 수 있습니다.</p>
       <div class="schoolrow" id="schoolEdit">
-        <input type="text" id="school" list="schools" maxlength="30" placeholder="다니는 학교 이름" aria-label="다니는 학교 이름" autocomplete="off">
+        <input type="text" id="school" list="schools" maxlength="30" placeholder="학교 이름 (예: ○○고등학교)" aria-label="다니는 학교 이름" autocomplete="off">
         <datalist id="schools"></datalist>
         <button id="saveSchool" type="button">학교 저장</button>
       </div>
@@ -348,6 +350,7 @@ tr.mine td{background:color-mix(in srgb,var(--gold) 18%,transparent)}
     <span class="wmark" aria-hidden="true">八</span>
     <h2>팔도한자에 어서 오세요</h2>
     <p>점수는 학교별로 모여 순위가 매겨져요. 다니는 학교 이름을 적어 주세요.</p>
+    <p class="wtip"><b>○○고등학교</b>처럼 줄이지 않은 정식 이름으로 적어 주세요. 같은 학교 친구들과 이름이 같아야 점수가 한곳에 모여요.</p>
     <input type="text" id="wSchool" list="schools" maxlength="30" placeholder="예: ○○고등학교" aria-label="다니는 학교 이름">
     <div class="wbtns"><button type="button" id="wSkip">나중에</button><button type="submit" id="wGo">시작하기</button></div>
   </form>
@@ -470,6 +473,9 @@ function unlocked(){return new Set(REG.map(r=>r.id))}
 function points(){let p=0;for(const k in S.solved)p+=S.solved[k];return p+clearedAll().length*BONUS}
 const norm=s=>String(s||'').replace(/\s+/g,'');
 const cleanSchool=s=>String(s||'').replace(/\s+/g,' ').trim().slice(0,30);
+const fullSchool=s=>{s=cleanSchool(s).replace(/\s+/g,'');if(!s)return s;
+  if(/(고등학교|중학교|초등학교|대학교|학교)$/.test(s))return s;
+  return s.replace(/여고$/,'여자고등학교').replace(/여중$/,'여자중학교').replace(/고$/,'고등학교').replace(/중$/,'중학교').slice(0,30)};
 function chosung(w){const C='ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';return [...w].map(c=>{const n=c.charCodeAt(0)-0xAC00;return n>=0&&n<11172?C[Math.floor(n/588)]:c}).join(' ')}
 
 function saveLocal(){try{localStorage.setItem('hanja-map-v1',JSON.stringify({school:S.school,solved:S.solved,tries:S.tries}))}catch(e){}}
@@ -906,8 +912,8 @@ function setSound(on,quiet){soundOn=on;try{localStorage.setItem('paldo-sound',on
 $('sndBtn').onclick=()=>setSound(!soundOn);
 setSound(soundOn,true);
 let editing=false;
-function saveSchool(){const v=cleanSchool($('school').value);S.school=v;$('school').value=v;editing=false;renderHome();
-  toast(v?v+' 이름으로 점수가 쌓입니다':'학교 이름을 넣으면 학교 점수에 더해집니다');renderBoard();push()}
+function saveSchool(){const raw=cleanSchool($('school').value),v=fullSchool(raw);S.school=v;$('school').value=v;editing=false;renderHome();
+  toast(v?v+(v!==raw.replace(/\s+/g,'')?'(으)로 정식 이름을 맞췄어요. 이 이름으로 점수가 쌓입니다':' 이름으로 점수가 쌓입니다'):'학교 이름을 넣으면 학교 점수에 더해집니다');renderBoard();push()}
 $('saveSchool').onclick=saveSchool;
 $('schoolChange').onclick=()=>{editing=true;renderHome();const i=$('school');i.focus();i.select()};
 let welcomed=false;
