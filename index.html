@@ -224,6 +224,21 @@ button.pill:hover{border-color:var(--line2);transform:translateY(-1px)}
 .wbtns button{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:9px 16px;font-weight:600}
 .wbtns #wGo{background:linear-gradient(140deg,var(--red),var(--red2));color:#fff;border-color:transparent}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
+.mini{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.mini-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.mini-h b{font-family:var(--display);font-weight:900;font-size:16px}
+.mini-h button{border:0;background:transparent;color:var(--blue);font-weight:600;font-size:13px;padding:2px 4px}
+#miniList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-variant-numeric:tabular-nums}
+#miniList li{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:baseline;padding:6px 8px;border-radius:10px;background:var(--soft);font-size:14px}
+#miniList li i{font-style:normal;font-family:var(--display);font-weight:900;color:var(--muted);text-align:center}
+#miniList li:first-child i{color:var(--gold)}
+#miniList li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+#miniList li em{font-style:normal;font-weight:700}
+#miniList li small{font-size:11.5px;color:var(--muted);font-weight:500;margin-left:4px}
+#miniList li.mine{background:color-mix(in srgb,var(--gold) 20%,transparent)}
+#miniList li.mini-empty{display:block;background:transparent;color:var(--muted);font-size:13px;padding:2px 0}
+#miniList li.mini-empty a{color:var(--blue);font-weight:600}
+@media(max-width:899px){.mini{margin-top:10px;padding-top:8px}#miniList li:nth-child(n+4){display:none}#miniList li{padding:4px 8px;font-size:13px}}
 .chip{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:7px 11px;font-weight:600;font-size:14px;display:flex;gap:6px;align-items:baseline;transition:transform .15s,border-color .15s}
 .chip i{font-style:normal;font-size:11.5px;font-weight:500;color:var(--muted);font-variant-numeric:tabular-nums}
 .chip:hover{border-color:var(--ink);transform:translateY(-1px)}
@@ -309,6 +324,10 @@ tr.mine td{background:color-mix(in srgb,var(--gold) 18%,transparent)}
       </div>
       <div class="mysch" id="schoolShow" hidden><span>내 학교</span><b id="schoolName"></b><button type="button" id="schoolChange">바꾸기</button></div>
       <div class="chips" id="chips"></div>
+      <div class="mini" id="mini">
+        <div class="mini-h"><b>학교 순위</b><button type="button" id="miniMore">전체 보기</button></div>
+        <ol id="miniList"><li class="mini-empty">순위를 불러오는 중입니다.</li></ol>
+      </div>
     </div>
     <div id="pick" hidden>
       <h2 id="pTitle"></h2><p id="pSub"></p>
@@ -848,6 +867,12 @@ function celebrate(r,before){
   setTimeout(()=>{c.classList.remove('on');busy=false;S.sel=null;mode=null;route=[];goNation();render();
     toast(clearedIds().length===REG.length?'모든 지역 완주! 축하합니다':'다음 지역을 골라 보세요',4500)},2300);
 }
+function renderMini(list,mk,msg){
+  const ol=$('miniList');ol.replaceChildren();
+  if(msg){const li=el('li','mini-empty');li.append(...msg);ol.append(li);return}
+  if(!list.length){ol.append(el('li','mini-empty','아직 점수를 올린 학교가 없어요.'));return}
+  list.slice(0,5).forEach((o,i)=>{const li=el('li',mk&&norm(o.name)===mk?'mine':null);const em=el('em',null,o.pts+'점');em.append(el('small',null,o.n+'명'));li.append(el('i',null,i+1),el('span',null,o.name),em);ol.append(li)});
+}
 function renderBoard(){
   if(FBMODE){
     const tb=$('rank');tb.replaceChildren();const mk=norm(S.school);
@@ -858,6 +883,7 @@ function renderBoard(){
     list.forEach((o,i)=>{const tr=el('tr',mk&&norm(o.name)===mk?'mine':null);[i+1,o.name,o.n+'명',o.pts].forEach(v=>tr.append(el('td',null,v)));tb.append(tr)});
     if(!list.length){const tr=el('tr'),td=el('td',null,fbSchools?'아직 점수를 올린 학교가 없어요. 첫 문제를 풀어 보세요.':'순위를 불러오는 중입니다.');td.colSpan=4;td.style.textAlign='left';tr.append(td);tb.append(tr)}
     const dl=$('schools');dl.replaceChildren();list.forEach(o=>{const op=el('option');op.value=o.name;dl.append(op)});
+    renderMini(list,mk);
     return;
   }
   const rows=new Map();
@@ -875,6 +901,7 @@ function renderBoard(){
     [i+1,o.name,o.n+'명',o.cl+'곳',o.pts].forEach(v=>tr.append(el('td',null,v)));tb.append(tr)});
   if(!list.length){const tr=el('tr'),td=el('td',null,'아직 점수를 올린 학교가 없어요. 학교 이름을 저장하고 첫 문제를 풀어 보세요.');td.colSpan=5;td.style.textAlign='left';tr.append(td);tb.append(tr)}
   const dl=$('schools');dl.replaceChildren();list.forEach(o=>{const op=el('option');op.value=o.name;dl.append(op)});
+  renderMini(list.map(o=>({name:o.name,pts:o.pts,n:o.n})),mk);
 }
 
 /* 잔잔한 효과음: 파일 없이 브라우저에서 합성 (오음계, 부드러운 시작과 긴 여운) */
@@ -922,6 +949,7 @@ function closeWelcome(){$('welcome').hidden=true}
 $('wForm').onsubmit=e=>{e.preventDefault();const v=cleanSchool($('wSchool').value);if(!v){$('wSchool').focus();return}$('school').value=v;closeWelcome();saveSchool()};
 $('wSkip').onclick=()=>{closeWelcome();toast('학교 이름은 오른쪽 패널에서 언제든 넣을 수 있어요',3500)};
 $('school').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveSchool()}});
+$('miniMore').onclick=()=>{$('rankBox').classList.add('open');if(FBMODE)fbWatch(true)};
 $('rankBtn').onclick=()=>{const o=$('rankBox').classList.toggle('open');if(FBMODE)fbWatch(o)};
 $('rankX').onclick=()=>{$('rankBox').classList.remove('open');if(FBMODE)fbWatch(false)};
 function goBack(){if(busy)return;if(S.sel&&mode!=='pick'){const id=S.sel;S.sel=null;select(id)}else select(null)}
@@ -965,7 +993,7 @@ async function connect(){
   const timer=setTimeout(()=>{$('rankNote').textContent='순위에 아직 연결되지 않았습니다. 보이는 점수는 최신이 아닐 수 있습니다.'},10000);
   db.collection('scores').onSnapshot(q=>{board=q.docs;renderBoard();
     if(!q.metadata.fromCache){clearTimeout(timer);$('rankNote').textContent='같은 학교 이름으로 참여한 사람의 점수를 모두 더합니다. 맞힐 때마다 바로 반영됩니다.'}
-  },()=>{clearTimeout(timer);$('rankNote').textContent='순위를 불러오지 못했습니다. 내 점수는 이 기기에 저장됩니다.'});
+  },()=>{clearTimeout(timer);$('rankNote').textContent='순위를 불러오지 못했습니다. 내 점수는 이 기기에 저장됩니다.';renderMini([],'',siteMsg())});
   if(!uid)canWrite=false;
 }
 
@@ -979,7 +1007,7 @@ let FBS={key:'',name:'',sent:0};
 try{const d=JSON.parse(localStorage.getItem('paldo-fb')||'null');if(d&&typeof d.sent==='number')FBS=d}catch(e){}
 const fbSave=()=>{try{localStorage.setItem('paldo-fb',JSON.stringify(FBS))}catch(e){}};
 const fbKey=n=>norm(n).replace(/[\/.#\[\]]/g,'_').slice(0,60);
-async function fbInit(){fs=true;$('rankNote').textContent='전국에서 같은 학교 이름으로 푼 점수를 모두 더한 순위입니다. 15초마다 새로 고쳐집니다.';fbQueue();if($('rankBox').classList.contains('open'))fbWatch(true)}
+async function fbInit(){fs=true;fbLoad();setInterval(()=>{if(document.visibilityState==='visible'&&!fbPoll&&S.sel===null)fbLoad()},30000);$('rankNote').textContent='전국에서 같은 학교 이름으로 푼 점수를 모두 더한 순위입니다. 15초마다 새로 고쳐집니다.';fbQueue();if($('rankBox').classList.contains('open'))fbWatch(true)}
 async function fbLoad(){
   try{
     const r=await fetch(FSBASE+'/schools?pageSize=100&orderBy=points%20desc');
@@ -989,7 +1017,8 @@ async function fbLoad(){
       return{name:cleanSchool(f.name&&f.name.stringValue),pts:num(f.points),n:num(f.players)}}).filter(o=>o.name&&(o.pts>0||o.n>0));
     $('rankNote').textContent='전국에서 같은 학교 이름으로 푼 점수를 모두 더한 순위입니다. 15초마다 새로 고쳐집니다.';
     renderBoard();
-  }catch(e){$('rankNote').textContent='순위를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.'}
+  }catch(e){const t='학교 순위 서버에 연결하지 못했습니다. 학교나 기관 와이파이에서 막혀 있을 수 있어요. 휴대폰 데이터로 열거나 잠시 뒤 다시 열어 주세요.';
+    $('rankNote').textContent=t;if(!fbSchools)renderMini([],'',[t])}
 }
 function fbWatch(on){
   if(!fs)return;
@@ -1023,7 +1052,8 @@ async function fbFlush(){
   fbBusy=false;
 }
 addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')fbFlush()});
-function offline(){$('rankNote').textContent='지금은 공유 순위에 연결되지 않아 내 점수만 보입니다. 점수는 이 기기에 저장됩니다.'}
+function siteMsg(){const a=el('a',null,'팔도한자 사이트');a.href='https://gavin19600.github.io/paldo-hanja/';a.target='_blank';a.rel='noopener';return ['전체 학교 순위는 ',a,'에서 볼 수 있어요.']}
+function offline(){renderMini([],'',siteMsg());$('rankNote').textContent='지금은 공유 순위에 연결되지 않아 내 점수만 보입니다. 점수는 이 기기에 저장됩니다.'}
 
 function start(saved){
   loadLocal();
