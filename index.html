@@ -624,7 +624,7 @@ function tap(t){
 }
 /* 꽃가루 */
 const fxc=$('fx').getContext('2d');let bits=[];
-function confetti(n,x,y){const cols=['#f2b705','#e03131','#2f9e44','#1d6fd6','#9c6ade','#ff922b'];
+function confetti(n,x,y){fxDirty=true;const cols=['#f2b705','#e03131','#2f9e44','#1d6fd6','#9c6ade','#ff922b'];
   for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,s=3+Math.random()*8;bits.push({x:x??W/2,y:y??H*.45,vx:Math.cos(a)*s,vy:Math.sin(a)*s-6,r:4+Math.random()*6,c:cols[i%cols.length],l:1,w:Math.random()*6})}}
 function drawFx(dt){fxc.clearRect(0,0,W,H);if(!bits.length)return;
   bits=bits.filter(p=>p.l>0);bits.forEach(p=>{p.vy+=22*dt;p.x+=p.vx*60*dt;p.y+=p.vy*60*dt;p.l-=dt*.6;p.w+=dt*10;
@@ -636,8 +636,13 @@ function frame(ts){
   const k=1-Math.pow(.0015,dt);
   V.x+=(G.x-V.x)*k;V.y+=(G.y-V.y)*k;V.s*=Math.pow(G.s/V.s,k);
   if(cur!=null){const p=PINS[cur],hk=1-Math.pow(.01,dt);hero.x+=(p.x-hero.x)*hk;hero.y+=(p.y-hero.y)*hk}
-  applyView();drawFx(dt);
+  const typing=document.activeElement===ansEl;
+  const moving=Math.abs(G.x-V.x)*V.s>.3||Math.abs(G.y-V.y)*V.s>.3||Math.abs(G.s/V.s-1)>.002||ptr.size>0;
+  if(!typing||moving||!viewDrawn){applyView();viewDrawn=!moving&&typing}
+  if(!typing)viewDrawn=false;
+  if(bits.length)drawFx(dt);else if(fxDirty){drawFx(dt);fxDirty=false}
 }
+let viewDrawn=false,fxDirty=false;
 
 /* ---------- 진행 ---------- */
 function regionKeys(id){return PINS.map((p,k)=>k).filter(k=>PINS[k].r.id===id)}
@@ -806,8 +811,17 @@ function paintSlots(){
 }
 let composing=false;
 const ansEl=$('ans');
-ansEl.addEventListener('compositionstart',()=>{composing=true;clearTimeout(settleT)});
-ansEl.addEventListener('compositionend',()=>{composing=false;check(false)});
+let compBase='';
+ansEl.addEventListener('compositionstart',()=>{composing=true;clearTimeout(settleT);
+  /* 조합을 시작하는 순간 이미 확정된 글자(커서 앞) */
+  compBase=ansEl.value.slice(0,ansEl.selectionStart==null?ansEl.value.length:ansEl.selectionStart)});
+function repairLost(){
+  /* 일부 윈도우 한글 입력기에서 새 글자를 조합하며 앞 글자를 덮어쓰는 문제를 바로잡는다 (조합이 끝난 뒤에만 값 수정) */
+  const v=ansEl.value;
+  if(compBase&&!v.startsWith(compBase)){const fixed=(compBase+v).slice(0,12);ansEl.value=fixed;try{ansEl.setSelectionRange(fixed.length,fixed.length)}catch(e){}}
+  compBase='';
+}
+ansEl.addEventListener('compositionend',()=>{composing=false;repairLost();paintSlots();check(false)});
 ansEl.addEventListener('input',e=>{if(e.isComposing)composing=true;paintSlots();check(false)});
 ansEl.addEventListener('keydown',e=>{if(e.key===' '&&!ansEl.value){e.preventDefault();skip()}});
 $('play').addEventListener('submit',e=>{e.preventDefault();check(true)});
