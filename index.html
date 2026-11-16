@@ -358,7 +358,7 @@ tr.mine td{background:color-mix(in srgb,var(--gold) 18%,transparent)}
   <h2>학교별 누적 점수 <button id="rankX" type="button" aria-label="닫기">×</button></h2>
   <p class="note" id="rankNote">순위를 불러오는 중입니다.</p>
   <div class="tablebox"><table>
-    <thead><tr><th>순위</th><th>학교</th><th>인원</th><th>클리어</th><th>점수</th></tr></thead>
+    <thead><tr id="rankHead"><th>순위</th><th>학교</th><th>인원</th><th>클리어</th><th>점수</th></tr></thead>
     <tbody id="rank"></tbody>
   </table></div>
 </div>
@@ -485,6 +485,7 @@ function applySaved(d){
 let writing=false,dirty=false;
 async function push(){
   saveLocal();
+  if(FBMODE){if(fs)fbQueue();return}
   if(!myDoc||!canWrite)return;
   if(writing){dirty=true;return}
   writing=true;
@@ -842,6 +843,17 @@ function celebrate(r,before){
     toast(clearedIds().length===REG.length?'모든 지역 완주! 축하합니다':'다음 지역을 골라 보세요',4500)},2300);
 }
 function renderBoard(){
+  if(FBMODE){
+    const tb=$('rank');tb.replaceChildren();const mk=norm(S.school);
+    $('rankHead').replaceChildren(...['순위','학교','인원','점수'].map(t=>el('th',null,t)));
+    const list=(fbSchools||[]).slice();
+    if(mk&&!list.some(o=>norm(o.name)===mk))list.push({name:S.school,pts:points(),n:1});
+    list.sort((a,b)=>b.pts-a.pts||a.name.localeCompare(b.name,'ko'));
+    list.forEach((o,i)=>{const tr=el('tr',mk&&norm(o.name)===mk?'mine':null);[i+1,o.name,o.n+'명',o.pts].forEach(v=>tr.append(el('td',null,v)));tb.append(tr)});
+    if(!list.length){const tr=el('tr'),td=el('td',null,fbSchools?'아직 점수를 올린 학교가 없어요. 첫 문제를 풀어 보세요.':'순위를 불러오는 중입니다.');td.colSpan=4;td.style.textAlign='left';tr.append(td);tb.append(tr)}
+    const dl=$('schools');dl.replaceChildren();list.forEach(o=>{const op=el('option');op.value=o.name;dl.append(op)});
+    return;
+  }
   const rows=new Map();
   const add=(school,pts,cl)=>{const k=norm(school);if(!k)return;const o=rows.get(k)||{name:school,pts:0,n:0,cl:0};o.pts+=pts;o.n++;o.cl+=cl;rows.set(k,o)};
   let mineIn=false;
@@ -904,8 +916,8 @@ function closeWelcome(){$('welcome').hidden=true}
 $('wForm').onsubmit=e=>{e.preventDefault();const v=cleanSchool($('wSchool').value);if(!v){$('wSchool').focus();return}$('school').value=v;closeWelcome();saveSchool()};
 $('wSkip').onclick=()=>{closeWelcome();toast('학교 이름은 오른쪽 패널에서 언제든 넣을 수 있어요',3500)};
 $('school').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveSchool()}});
-$('rankBtn').onclick=()=>$('rankBox').classList.toggle('open');
-$('rankX').onclick=()=>$('rankBox').classList.remove('open');
+$('rankBtn').onclick=()=>{const o=$('rankBox').classList.toggle('open');if(FBMODE)fbWatch(o)};
+$('rankX').onclick=()=>{$('rankBox').classList.remove('open');if(FBMODE)fbWatch(false)};
 function goBack(){if(busy)return;if(S.sel&&mode!=='pick'){const id=S.sel;S.sel=null;select(id)}else select(null)}
 $('backBtn').onclick=goBack;
 function setCat(c){
@@ -934,6 +946,7 @@ addEventListener('keydown',e=>{
 
 /* ---------- 공유 점수 ---------- */
 async function connect(){
+  if(FBMODE){await fbInit();return}
   let ok=false;
   for(let i=0;i<30&&!ok;i++){ok=!!(window.claude&&window.claude.use);if(!ok)await new Promise(r=>setTimeout(r,200))}
   if(!ok)return offline();
@@ -949,6 +962,61 @@ async function connect(){
   },()=>{clearTimeout(timer);$('rankNote').textContent='순위를 불러오지 못했습니다. 내 점수는 이 기기에 저장됩니다.'});
   if(!uid)canWrite=false;
 }
+
+/* ---------- 모두가 보는 학교 순위 (GitHub 사이트: Firebase) ----------
+   학교마다 문서 하나(schools/학교이름)에 점수와 인원을 더해 간다.
+   이 기기가 어느 학교에 몇 점을 보냈는지 기억해, 늘어난 만큼만 보낸다. */
+const FSBASE='https://firestore.googleapis.com/v1/projects/paldo-hanja/databases/(default)/documents';
+const FBMODE=/github\.io$/.test(location.hostname)||/[?&]fb=1/.test(location.search);
+let fs=null,fbSchools=null,fbPoll=0,fbBusy=false,fbTimer=0;
+let FBS={key:'',name:'',sent:0};
+try{const d=JSON.parse(localStorage.getItem('paldo-fb')||'null');if(d&&typeof d.sent==='number')FBS=d}catch(e){}
+const fbSave=()=>{try{localStorage.setItem('paldo-fb',JSON.stringify(FBS))}catch(e){}};
+const fbKey=n=>norm(n).replace(/[\/.#\[\]]/g,'_').slice(0,60);
+async function fbInit(){fs=true;$('rankNote').textContent='전국에서 같은 학교 이름으로 푼 점수를 모두 더한 순위입니다. 15초마다 새로 고쳐집니다.';fbQueue();if($('rankBox').classList.contains('open'))fbWatch(true)}
+async function fbLoad(){
+  try{
+    const r=await fetch(FSBASE+'/schools?pageSize=100&orderBy=points%20desc');
+    if(!r.ok)throw new Error(r.status);
+    const j=await r.json();
+    fbSchools=(j.documents||[]).map(d=>{const f=d.fields||{};const num=v=>v?Math.max(0,Math.round(Number(v.integerValue??v.doubleValue??0))):0;
+      return{name:cleanSchool(f.name&&f.name.stringValue),pts:num(f.points),n:num(f.players)}}).filter(o=>o.name);
+    $('rankNote').textContent='전국에서 같은 학교 이름으로 푼 점수를 모두 더한 순위입니다. 15초마다 새로 고쳐집니다.';
+    renderBoard();
+  }catch(e){$('rankNote').textContent='순위를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.'}
+}
+function fbWatch(on){
+  if(!fs)return;
+  clearInterval(fbPoll);fbPoll=0;
+  if(on){fbLoad();fbPoll=setInterval(()=>{if(document.visibilityState==='visible')fbLoad()},15000)}
+}
+function fbQueue(){clearTimeout(fbTimer);fbTimer=setTimeout(fbFlush,3000)}
+async function fbSend(key,name,dp,dn){
+  while(dp!==0||dn!==0){
+    const step=Math.max(-6000,Math.min(300,dp));
+    const body={writes:[{update:{name:'projects/paldo-hanja/databases/(default)/documents/schools/'+key,fields:{name:{stringValue:name}}},
+      updateMask:{fieldPaths:['name']},
+      updateTransforms:[{fieldPath:'points',increment:{integerValue:String(step)}},{fieldPath:'players',increment:{integerValue:String(dn)}},{fieldPath:'updated',setToServerValue:'REQUEST_TIME'}]}]};
+    const r=await fetch(FSBASE+':commit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),keepalive:true});
+    if(!r.ok)throw new Error(r.status);
+    dp-=step;dn=0;
+  }
+}
+async function fbFlush(){
+  if(!fs||fbBusy)return;fbBusy=true;
+  try{
+    const want=fbKey(S.school),pts=points();
+    if(FBS.key&&FBS.key!==want){await fbSend(FBS.key,FBS.name,-FBS.sent,-1);FBS={key:'',name:'',sent:0};fbSave()}
+    if(want){
+      const first=FBS.key!==want;
+      if(first){FBS={key:want,name:cleanSchool(S.school),sent:0}}
+      const dp=pts-FBS.sent;
+      if(dp!==0||first){await fbSend(want,FBS.name,dp,first?1:0);FBS.sent=pts;fbSave();if(fbPoll)fbLoad()}
+    }
+  }catch(e){}
+  fbBusy=false;
+}
+addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')fbFlush()});
 function offline(){$('rankNote').textContent='지금은 공유 순위에 연결되지 않아 내 점수만 보입니다. 점수는 이 기기에 저장됩니다.'}
 
 function start(saved){
