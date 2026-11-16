@@ -115,6 +115,8 @@ button.pill:hover{border-color:var(--line2);transform:translateY(-1px)}
 .prog .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--green),#3fd39a);border-radius:99px;transition:width .5s}
 .prog b{font-weight:600;font-variant-numeric:tabular-nums;color:var(--muted)}
 .prog .ttl{overflow:hidden;text-overflow:ellipsis}
+.snd{padding:7px 10px;line-height:0;color:var(--muted)}
+.snd.off{opacity:.6}
 .score{font-family:var(--display);font-weight:900;font-size:18px;font-variant-numeric:tabular-nums;padding:6px 14px}
 .score.bump{animation:bump .4s}
 @keyframes bump{40%{transform:scale(1.18)}}
@@ -279,6 +281,7 @@ tr.mine td{background:color-mix(in srgb,var(--gold) 18%,transparent)}
   <div class="pill brand"><span class="mark" aria-hidden="true">八</span><div><b>팔도한자</b><small>한자로 읽는 우리 땅</small></div></div>
   <nav class="tabrow"><div class="pill seg" id="tabs" role="group" aria-label="종류 고르기"><button type="button" data-c="p" class="on">지명</button><button type="button" data-c="d">동네</button><button type="button" data-c="h">문화재</button><button type="button" data-c="m">산</button><button type="button" data-c="r">강·호수</button><button type="button" data-c="y">역사</button><button type="button" data-c="s">학교</button></div></nav>
   <div class="right">
+    <button class="pill snd" id="sndBtn" type="button" aria-label="효과음 끄기" title="효과음"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9h4l5-4v14l-5-4H4z"/><path id="sndWave" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 9.5a3.5 3.5 0 0 1 0 5M18.5 7a7 7 0 0 1 0 10"/><path id="sndX" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16.5 9.5l5 5M21.5 9.5l-5 5" style="display:none"/></svg></button>
     <div class="pill score" id="scoreBox" aria-live="polite"><span id="pts">0</span>점</div>
     <button class="pill go" id="rankBtn" type="button">학교 순위</button>
   </div>
@@ -615,6 +618,7 @@ function regionKeys(id){return PINS.map((p,k)=>k).filter(k=>PINS[k].r.id===id)}
 function unsolved(id){return regionKeys(id).filter(k=>S.solved[iid(PINS[k].r,PINS[k].i)]==null)}
 function nearest(list,from){let best=null,bd=1e9;list.forEach(k=>{const d=from==null?PINS[k].y:Math.hypot(PINS[k].x-PINS[from].x,PINS[k].y-PINS[from].y);if(d<bd){bd=d;best=k}});return best}
 function select(id){
+  if(id&&!busy)sfx('tap');
   if(busy)return;
   const u=unlocked();
   if(id&&!u.has(id)){const from=REG.filter(r=>(r.opens||[]).includes(id)).map(r=>r.name);
@@ -634,6 +638,7 @@ function tour(id){const left=new Set(regionKeys(id)),out=[];let c=nearest([...le
   while(c!=null){out.push(c);left.delete(c);c=left.size?nearest([...left],c):null}return out}
 function startLearn(){mode='learn';order=tour(S.sel);learnIdx=0;showLearn()}
 function showLearn(){
+  sfx('flip');
   const k=order[learnIdx],p=PINS[k];cur=k;
   if(!hero.on){hero.on=true;hero.x=p.x;hero.y=p.y}
   goPin(p);render();
@@ -785,7 +790,7 @@ const revealed=new Set();
 $('reveal').onclick=()=>{
   if(cur==null||busy)return;
   const p=PINS[cur],id=iid(p.r,p.i);
-  revealed.add(id);S.tries[id]=Math.max(2,S.tries[id]||0);saveLocal();
+  sfx('hint');revealed.add(id);S.tries[id]=Math.max(2,S.tries[id]||0);saveLocal();
   render();ansEl.focus();
 };
 function check(force){
@@ -795,12 +800,14 @@ function check(force){
   if(force?v.length>0:(!composing&&v.length>it[1].length))wrong();
 }
 function wrong(){
+  sfx('no');
   const p=PINS[cur],id=iid(p.r,p.i);S.tries[id]=(S.tries[id]||0)+1;saveLocal();
   ansEl.value='';ansEl.blur();const c=$('card');c.classList.remove('shake');void c.offsetWidth;c.classList.add('shake');
   render();if(!revealed.has(id))$('qFb').textContent=S.tries[id]>=2?'초성 힌트 '+chosung(p.r.items[p.i][1]):'아직 아니에요. 다시 쳐 보세요';
   setTimeout(()=>ansEl.focus(),30);
 }
 function correct(){
+  sfx('ok');
   const p=PINS[cur],r=p.r,it=r.items[p.i],id=iid(r,p.i),before=unlocked();
   let got=PTS[Math.min(S.tries[id]||0,PTS.length-1)];if(hintMode)got=Math.min(got,7);S.solved[id]=got;busy=true;
   ansEl.value='';ansEl.blur();
@@ -817,12 +824,14 @@ function correct(){
   },1200);
 }
 function skip(){
+  if(cur!=null&&!busy)sfx('skip');
   if(cur==null||busy)return;
   const left=unsolved(S.sel).filter(k=>k!==cur);if(!left.length){toast('이 지역에 남은 문화재는 이것뿐이에요');return}
   skipped.add(cur);let pool=left.filter(k=>!skipped.has(k));if(!pool.length){skipped.clear();pool=left}
   setTarget(nearest(pool,cur));
 }
 function celebrate(r,before){
+  setTimeout(()=>sfx('clear'),400);
   busy=true;cur=null;hero.on=false;mode='pick';
   const fresh=[...unlocked()].filter(x=>!before.has(x)).map(x=>BYID[x].name);
   $('clearTxt').replaceChildren(el('b',null,'通'),document.createTextNode(r.name+' 클리어 +'+BONUS+'점'));
@@ -849,6 +858,41 @@ function renderBoard(){
   if(!list.length){const tr=el('tr'),td=el('td',null,'아직 점수를 올린 학교가 없어요. 학교 이름을 저장하고 첫 문제를 풀어 보세요.');td.colSpan=5;td.style.textAlign='left';tr.append(td);tb.append(tr)}
   const dl=$('schools');dl.replaceChildren();list.forEach(o=>{const op=el('option');op.value=o.name;dl.append(op)});
 }
+
+/* 잔잔한 효과음: 파일 없이 브라우저에서 합성 (오음계, 부드러운 시작과 긴 여운) */
+let actx=null,master=null,soundOn=true;
+try{soundOn=localStorage.getItem('paldo-sound')!=='off'}catch(e){}
+function audio(){
+  if(!soundOn)return null;
+  if(!actx){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;actx=new AC();
+    master=actx.createGain();master.gain.value=.16;
+    const dl=actx.createDelay();dl.delayTime.value=.23;const fb=actx.createGain();fb.gain.value=.28;const lp=actx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2400;
+    master.connect(actx.destination);master.connect(dl);dl.connect(lp);lp.connect(fb);fb.connect(dl);lp.connect(actx.destination)}
+  if(actx.state==='suspended')actx.resume();
+  return actx;
+}
+function tone(f,t0,dur,vol,type){
+  const a=audio();if(!a)return;const t=a.currentTime+t0;
+  const o=a.createOscillator(),g=a.createGain();o.type=type||'sine';o.frequency.value=f;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+.015);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+  o.connect(g);g.connect(master);o.start(t);o.stop(t+dur+.05);
+}
+function sfx(k){
+  try{
+    if(k==='tap')tone(880,0,.12,.18,'triangle');
+    else if(k==='flip'){tone(659,0,.16,.14,'triangle');tone(988,.05,.2,.08,'sine')}
+    else if(k==='ok'){tone(784,0,.5,.4);tone(1175,.09,.7,.32);tone(1568,.18,.9,.14)}
+    else if(k==='no'){tone(330,0,.22,.3,'triangle');tone(294,.1,.3,.24,'triangle')}
+    else if(k==='hint')tone(523,0,.4,.22);
+    else if(k==='skip')tone(587,0,.18,.16,'triangle');
+    else if(k==='clear')[523,659,784,1047,1319].forEach((f,i)=>tone(f,i*.11,1.2,.3));
+  }catch(e){}
+}
+function setSound(on,quiet){soundOn=on;try{localStorage.setItem('paldo-sound',on?'on':'off')}catch(e){}
+  $('sndBtn').classList.toggle('off',!on);$('sndBtn').setAttribute('aria-label',on?'효과음 끄기':'효과음 켜기');
+  $('sndWave').style.display=on?'':'none';$('sndX').style.display=on?'none':'';if(on&&!quiet)sfx('tap')}
+$('sndBtn').onclick=()=>setSound(!soundOn);
+setSound(soundOn,true);
 let editing=false;
 function saveSchool(){const v=cleanSchool($('school').value);S.school=v;$('school').value=v;editing=false;renderHome();
   toast(v?v+' 이름으로 점수가 쌓입니다':'학교 이름을 넣으면 학교 점수에 더해집니다');renderBoard();push()}
@@ -865,6 +909,7 @@ $('rankX').onclick=()=>$('rankBox').classList.remove('open');
 function goBack(){if(busy)return;if(S.sel&&mode!=='pick'){const id=S.sel;S.sel=null;select(id)}else select(null)}
 $('backBtn').onclick=goBack;
 function setCat(c){
+  if(!busy&&c!==CAT)sfx('tap');
   if(busy)return;
   if(c===CAT)return;
   const was=REG;CAT=c;REG=isD()?DREG.filter(r=>r[c].length):REGIONS;S.sel=null;mode=null;cur=null;route=[];skipped.clear();hero.on=false;photoId='';
