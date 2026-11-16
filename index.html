@@ -697,7 +697,7 @@ function setTarget(k){
   if(!hero.on){hero.on=true;hero.x=p.x;hero.y=p.y}
   if(route[route.length-1]!==k)route.push(k);
   goPin(p);render();
-  const a=$('ans');a.value='';paintSlots();
+  const a=$('ans');if(document.activeElement===a)a.blur();composing=false;a.value='';paintSlots();
   if(matchMedia('(hover:hover)').matches)setTimeout(()=>a.focus(),50);
 }
 function render(){
@@ -806,9 +806,9 @@ function paintSlots(){
 }
 let composing=false;
 const ansEl=$('ans');
-ansEl.addEventListener('compositionstart',()=>composing=true);
+ansEl.addEventListener('compositionstart',()=>{composing=true;clearTimeout(settleT)});
 ansEl.addEventListener('compositionend',()=>{composing=false;check(false)});
-ansEl.addEventListener('input',()=>{paintSlots();check(false)});
+ansEl.addEventListener('input',e=>{if(e.isComposing)composing=true;paintSlots();check(false)});
 ansEl.addEventListener('keydown',e=>{if(e.key===' '&&!ansEl.value){e.preventDefault();skip()}});
 $('play').addEventListener('submit',e=>{e.preventDefault();check(true)});
 $('skip').onclick=skip;
@@ -819,21 +819,28 @@ $('reveal').onclick=()=>{
   sfx('hint');revealed.add(id);S.tries[id]=Math.max(2,S.tries[id]||0);saveLocal();
   render();ansEl.focus();
 };
-function check(force){
+let settleT=0;
+function settle(force){
+  /* 한글 조합을 확정시킨 뒤 다시 검사한다. 조합 중에 값을 바꾸면 다음 글자가 첫 칸으로 들어가는 문제가 생긴다. */
+  clearTimeout(settleT);ansEl.blur();
+  settleT=setTimeout(()=>{composing=false;check(force,true)},40);
+}
+function check(force,settled){
   if(cur==null||busy)return;
   const p=PINS[cur],it=p.r.items[p.i],v=norm(ansEl.value);
-  if(v===it[1])return correct();
+  if(v===it[1]){if(composing&&!settled)return settle(force);return correct()}
+  if(force&&composing&&!settled)return settle(force);
   if(force?v.length>0:(!composing&&v.length>it[1].length))wrong();
 }
 function wrong(){
-  sfx('no');
+  sfx('no');composing=false;
   const p=PINS[cur],id=iid(p.r,p.i);S.tries[id]=(S.tries[id]||0)+1;saveLocal();
   ansEl.value='';ansEl.blur();const c=$('card');c.classList.remove('shake');void c.offsetWidth;c.classList.add('shake');
   render();if(!revealed.has(id))$('qFb').textContent=S.tries[id]>=2?'초성 힌트 '+chosung(p.r.items[p.i][1]):'아직 아니에요. 다시 쳐 보세요';
   setTimeout(()=>ansEl.focus(),30);
 }
 function correct(){
-  sfx('ok');
+  sfx('ok');composing=false;clearTimeout(settleT);
   const p=PINS[cur],r=p.r,it=r.items[p.i],id=iid(r,p.i),before=unlocked();
   let got=PTS[Math.min(S.tries[id]||0,PTS.length-1)];if(hintMode)got=Math.min(got,7);S.solved[id]=got;busy=true;
   ansEl.value='';ansEl.blur();
