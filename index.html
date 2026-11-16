@@ -980,7 +980,7 @@ async function fbLoad(){
     if(!r.ok)throw new Error(r.status);
     const j=await r.json();
     fbSchools=(j.documents||[]).map(d=>{const f=d.fields||{};const num=v=>v?Math.max(0,Math.round(Number(v.integerValue??v.doubleValue??0))):0;
-      return{name:cleanSchool(f.name&&f.name.stringValue),pts:num(f.points),n:num(f.players)}}).filter(o=>o.name);
+      return{name:cleanSchool(f.name&&f.name.stringValue),pts:num(f.points),n:num(f.players)}}).filter(o=>o.name&&(o.pts>0||o.n>0));
     $('rankNote').textContent='전국에서 같은 학교 이름으로 푼 점수를 모두 더한 순위입니다. 15초마다 새로 고쳐집니다.';
     renderBoard();
   }catch(e){$('rankNote').textContent='순위를 불러오지 못했습니다. 잠시 뒤 다시 열어 주세요.'}
